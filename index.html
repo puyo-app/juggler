@@ -139,7 +139,7 @@
             border-radius: 16px;
             background: #000;
             color: var(--accent-color);
-            inputmode: numeric;
+            inputmode: numeric; /* 数字キーパッドを強制 */
             box-sizing: border-box;
             font-family: Menlo, Consolas, Monaco, monospace; /* 等幅フォント */
             line-height: 1.2;
@@ -249,8 +249,9 @@
 
     <!-- 最下部：入力エリア -->
     <div class="input-wrapper">
-        <!-- textareaに変更し、改行や文字数によるスタイル変更を可能にする -->
+        <!-- inputmode="numeric" と pattern="[0-9]*" を追加して数字キーボードを強制 -->
         <textarea id="masterInput" rows="1" maxlength="17" placeholder="G4桁+B+R (×2台)" 
+               inputmode="numeric" pattern="[0-9]*"
                onfocus="handleFocus()" onblur="handleBlur()" oninput="processInput()"></textarea>
     </div>
 </div>
