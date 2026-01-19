@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>最速判別＋期待割</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --accent-color: #00ff00;
+            --error-color: #ff4444;
+            --blue-gradient: linear-gradient(90deg, #007bff, #00c6ff);
+            --orange-gradient: linear-gradient(90deg, #ff5722, #ff9800);
+            --text-blue: #40a0ff;
+            --text-orange: #ff8a50;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg-color);
+            color: white;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        .container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: env(safe-area-inset-top, 10px) 15px env(safe-area-inset-bottom, 10px) 15px;
+        }
+
+        /* --- 1. 設定分布（画面上部） --- */
+        #resultArea {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 5px;
+        }
+        table { width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: 12px; }
+        td { padding: 6px 8px; border-bottom: 1px solid #333; vertical-align: middle; }
+        .setting-name { width: 85px; font-weight: bold; font-size: 11px; color: #aaa; line-height: 1.2; }
+        .setting-name b { font-size: 13px; color: #fff; display: block; }
+        
+        .bar-cell { vertical-align: middle; }
+        .bar-wrapper { display: flex; flex-direction: column; gap: 2px; width: 100%; }
+        .bar-container { width: 100%; background: #333; height: 10px; border-radius: 5px; overflow: hidden; position: relative; }
+        .bar { height: 100%; transition: width 0.3s ease-out; }
+        .bar.blue { background: var(--blue-gradient); }
+        .bar.orange { background: var(--orange-gradient); }
+        
+        .percent-cell { text-align: right; width: 60px; }
+        .percent-wrapper { display: flex; flex-direction: column; gap: 2px; justify-content: center; height: 100%; }
+        .percent { font-size: 13px; font-weight: bold; }
+        .percent.blue { color: var(--text-blue); }
+        .percent.orange { color: var(--text-orange); }
+
+        /* --- 2. 期待機械割・期待枚数表示 --- */
+        .payout-card {
+            background: #2a2a2a;
+            padding: 8px 12px;
+            border-radius: 12px;
+            margin-bottom: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            border-left: 4px solid #555;
+            transition: all 0.3s;
+        }
+        .payout-row { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+        .payout-row.unit1 { border-left: 2px solid #007bff; padding-left: 6px; }
+        .payout-row.unit2 { border-left: 2px solid #ff5722; padding-left: 6px; margin-top: 4px; border-top: 1px solid #333; paddingTop: 4px; }
+        
+        .payout-info { display: flex; flex-direction: column; }
+        .payout-label { font-size: 9px; color: #bbb; margin-bottom: 1px; }
+        .payout-value { font-size: 18px; font-weight: bold; color: #fff; }
+        .payout-unit { font-size: 11px; margin-left: 1px; color: #888; }
+        
+        .diff-info { text-align: right; }
+        .diff-label { font-size: 9px; color: #bbb; margin-bottom: 1px; }
+        .diff-value { font-size: 18px; font-weight: bold; }
+        .diff-unit { font-size: 11px; margin-left: 1px; color: #888; }
+        .plus { color: var(--accent-color); }
+        .minus { color: var(--error-color); }
+
+        /* --- 3. 中間の数値モニタ --- */
+        .monitor {
+            background: #252525; padding: 8px; border-radius: 12px; margin-bottom: 8px;
+            display: flex; flex-direction: column; gap: 4px;
+            transition: all 0.3s;
+        }
+        .monitor-row { display: flex; justify-content: space-around; align-items: center; }
+        .monitor-row.unit1 { color: var(--text-blue); }
+        .monitor-row.unit2 { color: var(--text-orange); border-top: 1px dashed #444; padding-top: 4px; }
+        .monitor-label { font-size: 10px; color: #aaa; width: 30px; }
+
+        .monitor div { text-align: center; min-width: 55px; }
+        .monitor span { display: block; font-size: 9px; color: #888; margin-bottom: 1px; }
+        .monitor b { font-size: 16px; line-height: 1; color: white; }
+        .monitor small { display: block; font-size: 9px; margin-top: 1px; color: inherit; }
+
+        /* --- 4. 機種選択 --- */
+        .mode-selector {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 4px;
+            margin-bottom: 8px;
+            width: 100%;
+        }
+        .mode-btn {
+            white-space: nowrap;
+            padding: 12px 0;
+            border: 1px solid #444;
+            background: #333;
+            color: #fff;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 10px;
+            cursor: pointer;
+        }
+        .mode-btn.active {
+            background: #007bff;
+            border-color: #007bff;
+        }
+
+        /* --- 5. 入力欄（最下部） --- */
+        .input-wrapper { margin-bottom: 5px; }
+        
+        /* テキストエリアのスタイル */
+        #masterInput {
+            width: 100%;
+            padding: 10px;
+            font-size: 28px;
+            text-align: center;
+            letter-spacing: 2px;
+            border: 2px solid #444;
+            border-radius: 16px;
+            background: #000;
+            color: var(--accent-color);
+            inputmode: numeric;
+            box-sizing: border-box;
+            font-family: Menlo, Consolas, Monaco, monospace; /* 等幅フォント */
+            line-height: 1.2;
+            resize: none; /* リサイズ無効 */
+            overflow: hidden;
+            height: 56px; /* 初期高さ */
+            transition: all 0.2s ease;
+        }
+
+        /* === 比較モード（コンパクト表示）のスタイル === */
+        body.compact-mode .setting-name { width: 70px; font-size: 10px; }
+        body.compact-mode .setting-name b { font-size: 11px; }
+        body.compact-mode td { padding: 4px 6px; }
+        
+        body.compact-mode .payout-card { padding: 6px 10px; margin-bottom: 4px; }
+        body.compact-mode .payout-value,
+        body.compact-mode .diff-value { font-size: 15px; }
+        
+        body.compact-mode .monitor { padding: 6px; margin-bottom: 4px; }
+        body.compact-mode .monitor b { font-size: 14px; }
+        
+        /* 入力欄：文字を小さくして折り返しやすくする */
+        #masterInput.small-font {
+            font-size: 18px;
+            letter-spacing: 4px;
+            height: 60px; /* 2行分入る高さ */
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- 上部：判別結果 -->
+    <div id="resultArea">
+        <div class="guide" id="statusLabel" style="text-align: center; font-size: 11px; color: #666; margin-bottom: 5px;">機種を選択して入力</div>
+        <div id="resultTable"></div>
+    </div>
+
+    <!-- 期待機械割・期待枚数表示 (2台分対応) -->
+    <div class="payout-card" id="payoutCard">
+        <!-- 1台目 -->
+        <div class="payout-row unit1">
+            <div class="payout-info">
+                <div class="payout-label">期待機械割 (台1)</div>
+                <div class="payout-value"><span id="avgPayout1">---</span><span class="payout-unit">%</span></div>
+            </div>
+            <div class="diff-info">
+                <div class="diff-label">期待収支/時間</div>
+                <div class="diff-value" id="diffValue1">---<span class="diff-unit">枚</span></div>
+            </div>
+        </div>
+        <!-- 2台目 (動的に表示) -->
+        <div class="payout-row unit2" id="payoutRow2" style="display: none;">
+            <div class="payout-info">
+                <div class="payout-label">期待機械割 (台2)</div>
+                <div class="payout-value"><span id="avgPayout2">---</span><span class="payout-unit">%</span></div>
+            </div>
+            <div class="diff-info">
+                <div class="diff-label">期待収支/時間</div>
+                <div class="diff-value" id="diffValue2">---<span class="diff-unit">枚</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 中部：現在の入力数値モニタ -->
+    <div class="monitor">
+        <!-- 1台目 -->
+        <div class="monitor-row unit1">
+            <div class="monitor-label" style="color:#00c6ff">台1</div>
+            <div>
+                <span>G数</span><b id="dispG1">0</b><small>&nbsp;</small>
+            </div>
+            <div>
+                <span>BIG</span><b id="dispB1">0</b><small id="probB1">1/--.-</small>
+            </div>
+            <div>
+                <span>REG</span><b id="dispR1">0</b><small id="probR1">1/--.-</small>
+            </div>
+        </div>
+        <!-- 2台目 -->
+        <div class="monitor-row unit2" id="monitorRow2" style="display: none;">
+            <div class="monitor-label" style="color:#ff9800">台2</div>
+            <div>
+                <span>G数</span><b id="dispG2">0</b><small>&nbsp;</small>
+            </div>
+            <div>
+                <span>BIG</span><b id="dispB2">0</b><small id="probB2">1/--.-</small>
+            </div>
+            <div>
+                <span>REG</span><b id="dispR2">0</b><small id="probR2">1/--.-</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- 下部：機種選択 -->
+    <div class="mode-selector">
+        <!-- 上段：その他 -->
+        <button id="btn-im" class="mode-btn" onclick="setMode('im')">アイム</button>
+        <button id="btn-ultra" class="mode-btn" onclick="setMode('ultra')">ウルトラ</button>
+        <button id="btn-fn2" class="mode-btn" onclick="setMode('fn2')">ファンキー</button>
+        <!-- 下段：よく使う機種 -->
+        <button id="btn-my5" class="mode-btn" onclick="setMode('my5')">マイⅤ</button>
+        <button id="btn-mr" class="mode-btn" onclick="setMode('mr')">ミスター</button>
+        <button id="btn-hp3" class="mode-btn" onclick="setMode('hp3')">ハッピー</button>
+    </div>
+
+    <!-- 最下部：入力エリア -->
+    <div class="input-wrapper">
+        <!-- textareaに変更し、改行や文字数によるスタイル変更を可能にする -->
+        <textarea id="masterInput" rows="1" maxlength="17" placeholder="G4桁+B+R (×2台)" 
+               onfocus="handleFocus()" onblur="handleBlur()" oninput="processInput()"></textarea>
+    </div>
+</div>
+
+<script>
+const masterData = {
+    im: { name: "ネオアイムジャグラーEX", config: [
+        {s:1, b:273.1, r:439.8, py:97.0}, {s:2, b:269.7, r:399.6, py:98.0}, {s:3, b:269.7, r:331.0, py:99.5},
+        {s:4, b:259.0, r:315.1, py:101.1}, {s:5, b:259.0, r:255.0, py:103.3}, {s:6, b:255.0, r:255.0, py:105.5}
+    ]},
+    ultra: { name: "ウルトラミラクルジャグラー", config: [
+        {s:1, b:267.5, r:425.6, py:97.0}, {s:2, b:261.1, r:402.1, py:98.1}, {s:3, b:256.0, r:350.5, py:99.9},
+        {s:4, b:242.7, r:322.8, py:102.9}, {s:5, b:233.2, r:297.9, py:105.8}, {s:6, b:216.3, r:277.7, py:108.4}
+    ]},
+    mr: { name: "ミスタージャグラー", config: [
+        {s:1, b:268.6, r:374.5, py:97.3}, {s:2, b:267.5, r:354.2, py:98.4}, {s:3, b:260.1, r:331.0, py:100.2},
+        {s:4, b:249.2, r:291.3, py:103.1}, {s:5, b:240.9, r:257.0, py:105.7}, {s:6, b:237.4, r:237.4, py:108.3}
+    ]},
+    my5: { name: "マイジャグラーⅤ", config: [
+        {s:1, b:273.1, r:409.6, py:97.0}, {s:2, b:270.8, r:385.5, py:98.0}, {s:3, b:266.4, r:336.1, py:99.9},
+        {s:4, b:254.0, r:290.0, py:102.8}, {s:5, b:240.1, r:268.6, py:105.3}, {s:6, b:229.1, r:229.1, py:109.4}
+    ]},
+    hp3: { name: "ハッピーVⅢ", config: [
+        {s:1, b:273.1, r:397.2, py:97.0}, {s:2, b:270.8, r:362.1, py:98.1}, {s:3, b:263.2, r:332.7, py:99.9},
+        {s:4, b:254.0, r:300.6, py:102.9}, {s:5, b:239.2, r:273.1, py:105.8}, {s:6, b:226.0, r:256.0, py:108.4}
+    ]},
+    fn2: { name: "ファンキー2", config: [
+        {s:1, b:266.4, r:439.8, py:97.0}, {s:2, b:259.0, r:407.1, py:98.5}, {s:3, b:256.0, r:366.1, py:99.8},
+        {s:4, b:249.2, r:322.8, py:102.0}, {s:5, b:240.9, r:299.3, py:104.3}, {s:6, b:219.9, r:262.1, py:109.0}
+    ]}
+};
+
+let currentMode = 'my5'; // 初期設定をマイVに
+let lastValue = "";
+
+function handleFocus() {
+    const input = document.getElementById('masterInput');
+    lastValue = input.value;
+    input.value = "";
+    // リセット時にスタイルも戻す
+    updateInputStyle("");
+}
+
+function handleBlur() {
+    const input = document.getElementById('masterInput');
+    if (input.value === "") {
+        input.value = lastValue;
+        updateInputStyle(lastValue);
+    }
+}
+
+function setMode(mode) {
+    currentMode = mode;
+    Object.keys(masterData).forEach(k => {
+        const btn = document.getElementById('btn-' + k);
+        if(btn) btn.classList.toggle('active', k === mode);
+    });
+    document.getElementById('statusLabel').innerText = masterData[mode].name + " 判別中";
+    processInput();
+}
+
+/**
+ * 入力値をパースして1台分または2台分のデータを返す
+ */
+function parseInputGlobal(rawVal) {
+    // 改行やスペースを除去して数字のみにする
+    const val = rawVal.replace(/[^0-9]/g, '');
+    const len = val.length;
+
+    // 16桁ジャストの場合のみ2台モード
+    if (len === 16) {
+        const part1 = val.substring(0, 8);
+        const part2 = val.substring(8, 16);
+        return {
+            mode: 2,
+            unit1: parseUnitFixed(part1),
+            unit2: parseUnitFixed(part2)
+        };
+    } else {
+        // 15桁以下の場合は、先頭から最大8桁までを1台目として扱う
+        let effectiveVal = val;
+        if (len > 8) {
+            effectiveVal = val.substring(0, 8);
+        }
+        return {
+            mode: 1,
+            unit1: parseUnitFlexible(effectiveVal)
+        };
+    }
+}
+
+// 8桁固定パース (G4, B2, R2)
+function parseUnitFixed(val) {
+    if (val.length !== 8) return null;
+    const g = parseInt(val.substring(0, 4));
+    const b = parseInt(val.substring(4, 6));
+    const r = parseInt(val.substring(6, 8));
+    return { g, b, r };
+}
+
+// 6~8桁可変パース (既存ロジック)
+function parseUnitFlexible(val) {
+    const len = val.length;
+    let g = 0, b = 0, r = 0;
+    if (len < 6) return null;
+    
+    g = parseInt(val.substring(0, 4));
+
+    if (len === 6) {
+        b = parseInt(val.substring(4, 5));
+        r = parseInt(val.substring(5, 6));
+    } else if (len === 8) {
+        b = parseInt(val.substring(4, 6));
+        r = parseInt(val.substring(6, 8));
+    } else if (len === 7) {
+        const b1 = parseInt(val.substring(4, 6)), r1 = parseInt(val.substring(6, 7));
+        const b2 = parseInt(val.substring(4, 5)), r2 = parseInt(val.substring(5, 7));
+        const conf6 = masterData[currentMode].config[5];
+        const combined6 = 1 / (1/conf6.b + 1/conf6.r);
+        const d1 = Math.abs(combined6 - (g / (b1 + r1)));
+        const d2 = Math.abs(combined6 - (g / (b2 + r2)));
+        if (d1 < d2) { b = b1; r = r1; } else { b = b2; r = r2; }
+    }
+    return { g, b, r };
+}
+
+function updateInputStyle(rawVal) {
+    const val = rawVal.replace(/[^0-9]/g, '');
+    const len = val.length;
+    const input = document.getElementById('masterInput');
+    const body = document.body;
+    
+    // 9文字以上でフォントを小さくして、全体をコンパクトモードに
+    if (len > 8) {
+        input.classList.add('small-font');
+        body.classList.add('compact-mode');
+    } else {
+        input.classList.remove('small-font');
+        body.classList.remove('compact-mode');
+    }
+}
+
+function processInput() {
+    const rawVal = document.getElementById('masterInput').value;
+    // スタイルの更新
+    updateInputStyle(rawVal);
+    
+    const result = parseInputGlobal(rawVal);
+    
+    // UIリセット
+    if (!result || !result.unit1) {
+        resetDisplays();
+        return;
+    }
+
+    // 1台目表示更新
+    updateUnitDisplay(1, result.unit1);
+
+    if (result.mode === 2 && result.unit2) {
+        // 2台モード
+        document.getElementById('monitorRow2').style.display = 'flex';
+        document.getElementById('payoutRow2').style.display = 'flex';
+        updateUnitDisplay(2, result.unit2);
+        calculate(result.unit1, result.unit2);
+    } else {
+        // 1台モード
+        document.getElementById('monitorRow2').style.display = 'none';
+        document.getElementById('payoutRow2').style.display = 'none';
+        calculate(result.unit1, null);
+    }
+}
+
+function resetDisplays() {
+    // 表示クリア処理（省略可）
+}
+
+function updateUnitDisplay(id, data) {
+    const { g, b, r } = data;
+    document.getElementById(`dispG${id}`).innerText = g;
+    document.getElementById(`dispB${id}`).innerText = b;
+    document.getElementById(`dispR${id}`).innerText = r;
+    document.getElementById(`probB${id}`).innerText = b > 0 ? `1/${(g/b).toFixed(1)}` : "1/--.-";
+    document.getElementById(`probR${id}`).innerText = r > 0 ? `1/${(g/r).toFixed(1)}` : "1/--.-";
+}
+
+function calculate(unit1, unit2) {
+    const currentConfig = masterData[currentMode].config;
+    
+    // 台1計算
+    const res1 = calcProbs(unit1, currentConfig);
+    // 台2計算 (存在する場合)
+    const res2 = unit2 ? calcProbs(unit2, currentConfig) : null;
+
+    let html = "<table>";
+    let weightedPayout1 = 0;
+    let weightedPayout2 = 0;
+
+    for (let i = 0; i < currentConfig.length; i++) {
+        const conf = currentConfig[i];
+        
+        // 台1
+        const share1 = res1.totalProb > 0 ? (res1.probs[i] / res1.totalProb) : 0;
+        const pct1 = (share1 * 100).toFixed(1);
+        weightedPayout1 += share1 * conf.py;
+
+        // 台2
+        let barHtml = `<div class="bar-container"><div class="bar blue" style="width: ${pct1}%"></div></div>`;
+        let pctHtml = `<div class="percent blue">${pct1}%</div>`;
+
+        if (res2) {
+            const share2 = res2.totalProb > 0 ? (res2.probs[i] / res2.totalProb) : 0;
+            const pct2 = (share2 * 100).toFixed(1);
+            weightedPayout2 += share2 * conf.py;
+
+            // 2台モード用のバーHTML (上下に並べる)
+            barHtml = `
+                <div class="bar-wrapper">
+                    <div class="bar-container"><div class="bar blue" style="width: ${pct1}%"></div></div>
+                    <div class="bar-container"><div class="bar orange" style="width: ${pct2}%"></div></div>
+                </div>`;
+            pctHtml = `
+                <div class="percent-wrapper">
+                    <div class="percent blue">${pct1}%</div>
+                    <div class="percent orange">${pct2}%</div>
+                </div>`;
+        }
+
+        html += `<tr>
+            <td class="setting-name"><b>設定${conf.s}</b>${conf.py.toFixed(1)}%</td>
+            <td class="bar-cell">${barHtml}</td>
+            <td class="percent-cell">${pctHtml}</td>
+        </tr>`;
+    }
+    
+    document.getElementById('resultTable').innerHTML = html + "</table>";
+    
+    // 期待値更新 (台1)
+    updatePayoutDisplay(1, weightedPayout1, res1.totalProb > 0);
+    
+    // 期待値更新 (台2)
+    if (unit2) {
+        updatePayoutDisplay(2, weightedPayout2, res2.totalProb > 0);
+    }
+}
+
+function calcProbs(data, config) {
+    let totalProb = 0;
+    const probs = config.map(conf => {
+        const pB = Math.pow(1/conf.b, data.b) * Math.exp(-data.g/conf.b);
+        const pR = Math.pow(1/conf.r, data.r) * Math.exp(-data.g/conf.r);
+        const prob = pB * pR;
+        totalProb += prob;
+        return prob;
+    });
+    return { probs, totalProb };
+}
+
+function updatePayoutDisplay(id, weightedPayout, isValid) {
+    const payoutEl = document.getElementById(`avgPayout${id}`);
+    const diffEl = document.getElementById(`diffValue${id}`);
+    
+    if (isValid) {
+        payoutEl.innerText = weightedPayout.toFixed(2);
+        const diff = 2100 * (weightedPayout / 100) - 2100;
+        const sign = diff >= 0 ? "+" : "";
+        const className = diff >= 0 ? "plus" : "minus";
+        diffEl.innerHTML = `<span class="${className}">${sign}${diff.toFixed(0)}</span><span class="diff-unit">枚</span>`;
+    } else {
+        payoutEl.innerText = "---";
+        diffEl.innerHTML = `---<span class="diff-unit">枚</span>`;
+    }
+}
+
+window.onload = () => {
+    setMode('my5');
+};
+</script>
+</body>
+</html>
